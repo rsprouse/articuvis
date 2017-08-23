@@ -77,9 +77,6 @@ class ArticApp(QtGui.QMainWindow):
         x = e.pos()[0]
         self.cw.tcursor.setValue(x)
 
-# TODO: if we do lots of updates by connecting sigDragged to this slot, then
-# RecursionError sometimes occurs. Is there a way to detect the condition and
-# temporarily stop updates to avoid the error?
     def update_artic_plots(self, e):
         x = e.pos()[0]
         self.aw.update_tplot(t2=x)

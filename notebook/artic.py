@@ -153,8 +153,8 @@ x-ray microbeam.'''
 
     def update_tplot(self, t1=None, t2=None):
         '''Update existing tplot between t1 and t2.'''
-        # Avoid RecursionError when too many calls to update_tplot() are made.
-        # Simply skip current update if another update is still executing.
+        # Skip current update if another update is still executing in order to
+        # avoid RecursionError when too many calls to update_tplot() are made.
         if self._is_updating is True:
 # TODO: return a value so that caller can try again?
             return
