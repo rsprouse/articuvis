@@ -53,17 +53,17 @@ class ArticApp(QtGui.QMainWindow):
         self.playsel.clicked.connect(self.cw.play_viewbox)
         self.updatesel.clicked.connect(self.app_make_tplot)
         self.anim.clicked.connect(self.aw.animate)
-        self.aw.pos_tcursor.sigDragged.connect(self.update_audio_tcursor)
-        #self.aw.pos_tcursor.sigDragged.connect(self.update_vel_tcursor)
-        self.aw.pos_tcursor.sigDragged.connect(self.update_artic_plots)
+
+        # Update audio_tcursor when pos_tcursor or vel_tcusor is dragged
+        # or when pos_tcursor is changed via animate. (No need to also update
+        # when vel_tcursor is changed via animate.)
+        self.aw.pos_tcursor.sigPositionChanged.connect(self.update_audio_tcursor)
         self.aw.vel_tcursor.sigDragged.connect(self.update_audio_tcursor)
-        #self.aw.vel_tcursor.sigDragged.connect(self.update_pos_tcursor)
+
+        # Update all articulation plots when any *_tcursor is dragged.
+        self.aw.pos_tcursor.sigDragged.connect(self.update_artic_plots)
         self.aw.vel_tcursor.sigDragged.connect(self.update_artic_plots)
-        #self.cw.tcursor.sigDragged.connect(self.update_pos_tcursor)
-        #self.cw.tcursor.sigDragged.connect(self.update_vel_tcursor)
         self.cw.tcursor.sigDragged.connect(self.update_artic_plots)
-    # TODO: when click in waveform, update_tplot() to that time
-    # TODO: when click in pos/vel windows, update_tplot() and move waveform cursor
     
         self.show()
 
