@@ -9,8 +9,8 @@ from ema import read_ecog_speaker_audio, read_ecog_speaker_data, \
 
 ecogspeaker = 'SN4'
 ecogbase = '/media/sf_EMA-ECOG/pilot-subjects'
-token = 'COMMA'
-rep = '01'
+token = 'MOCHA_TIMIT'
+rep = '030'
 dont_show = [
     'EMPTY', 'REF', 'UNK', 'FH', 'OS', 'MS', 'TM', 'PL'
 ]
@@ -46,7 +46,7 @@ win = ArticApp(
     xyz=xyzdims,
     lines={
         'tongue': {
-            'elements': ['TB', 'TD', 'TL'],
+            'elements': ['TB', 'TL', 'TD'],
             'pen': (128, 255, 128, 128)
         },
         'mouth': {
@@ -67,8 +67,8 @@ win = ArticApp(
 )
 win.resize(800,700)
 win.setWindowTitle('EMA')
-win.aw.pos_vel_elements = ['UL', 'LL']  # Which elements to show in position/velocity plots
-win.aw.pos_vel_dim = 'x'  # Which dimension to show in position/velocity plots
+win.aw.pos_vel_elements = ['TD']  # Which elements to show in position/velocity plots
+win.aw.pos_vel_dim = 'y'  # Which dimension to show in position/velocity plots
 
 win.show()
 sys.exit(app.exec_())
