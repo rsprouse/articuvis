@@ -42,7 +42,7 @@ def read_ecog_palate_trace(basepath, speaker, trange, dataname='Palate', element
     landmarkdf = paldf.loc[tracetimes, palcols]
     landmarkdf.columns = ['x', 'y']
     landmarkdf = landmarkdf.assign(
-        landmark=pd.Series(['palate'] * len(landmarkdf))
+        landmark=['palate'] * len(landmarkdf)
     )
     return landmarkdf
 
