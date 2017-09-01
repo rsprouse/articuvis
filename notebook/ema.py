@@ -3,85 +3,146 @@ import pandas as pd
 import scipy.io.wavfile
 import wavio
 
-# These are functions that are specific to the EMA data and go in a separate repo.
-def ecog_speakerdir_for_speaker(speaker):
-    '''Convert speaker names like SN125 to speaker directories like 
-Subject_125.'''
-    m = re.search(r'(\d+)$', speaker)
-    speakerdir = 'Subject_{}'.format(m.groups()[0])
-    return speakerdir
+def speaker_as_int_str(speaker):
+    '''Take a speaker identifier and return the speaker as an str
+representing an integer. Speaker identifiers may be strings like 'Subject_4',
+'SN4, or '4' or integers.'''
+    spkridre = re.compile(r'^(?:Subject_|SN)?(?P<subjnum>\d+)$')
+    if isinstance(speaker, str):
+        m = spkridre.search(speaker)
+        if m is None:
+            raise RuntimeError('Unrecognized speaker identifier.')
+        int_str = m.group('subjnum')
+    else:
+        int_str = str(speaker)
+    return int_str
 
-def read_ecog_speaker_audio(basepath, speaker, dataname, rep):
-    '''Read a UCSF EMA (ECOG) speaker audio file. Return sample rate and
+class EmaEcogDataLoader():
+    '''A class for loading EMA-ECOG data.'''
+    def __init__(self, datadir, *args, **kwargs):
+        super(EmaEcogDataLoader, self).__init__(*args, **kwargs)
+        self.datadir = datadir
+        self.speaker_map = self.get_speaker_map()
+
+    def get_speaker_map(self):
+        '''Find subject directories in datadir and return a dict that maps subject
+numbers to utterances and repetitions.'''
+        ddir = self.datadir
+        spkrmap = {}
+        snre = re.compile(r'Subject_(\d+)$')
+        dirs = [
+            os.path.join(ddir, o) for o in os.listdir(ddir) \
+                if os.path.isdir(os.path.join(ddir, o))
+        ]
+        for d in dirs:
+            m = snre.search(d)
+            if m:
+                spkrnum = m.group(1)
+                tokenre = re.compile(r'^SN{}_(.+)_(\d+)\.ndi$'.format(spkrnum))
+                utterances = {}
+                for f in os.listdir(d):
+                    tm = tokenre.search(f)
+                    if tm and os.path.isfile(os.path.join(self.datadir, d, f)):
+                        utt = tm.group(1)
+                        rep = tm.group(2)
+                        try:
+                            utterances[utt].append(rep)
+                        except KeyError:
+                            utterances[utt] = [rep]
+                spkrmap[spkrnum] = utterances
+        return spkrmap
+
+    def get_audio(self, speakerid, dataname, rep):
+        '''Read a UCSF EMA (ECOG) speaker audio file. Return sample rate and
 audio data as a numpy array.
 '''
-    if rep is None or rep == '':
-        rep = ''
-    else:
-        if not isinstance(rep, str):  # if rep is passed as an int
-            rep = '_{:03d}'.format(rep)
-        elif not rep.startswith('_'):
-            rep = '_' + rep
-    fname = os.path.join(
-        basepath,
-        ecog_speakerdir_for_speaker(speaker),
-        '{}_{}{}.wav'.format(speaker, dataname, rep)
-    )
-    # Use wavio for broken .wav files
-    w = wavio.read(fname)
-    return (w.rate, w.data[:, 0])
-#    return scipy.io.wavfile.read(fname)
+        if rep is None or rep == '':
+            rep = ''
+        else:
+            if not isinstance(rep, str):  # if rep is passed as an int
+                rep = '_{:03d}'.format(rep)
+            elif not rep.startswith('_'):
+                rep = '_' + rep
+        spkr_int_str = speaker_as_int_str(speakerid)
+        fname = os.path.join(
+            self.datadir,
+            'Subject_{}'.format(spkr_int_str),
+            'SN{}_{}{}.wav'.format(spkr_int_str, dataname, rep)
+        )
+        # Use wavio for broken .wav files
+        w = wavio.read(fname)
+        return (w.rate, w.data[:, 0])
+#        return scipy.io.wavfile.read(fname)
     
-def read_ecog_palate_trace(basepath, speaker, trange, dataname='Palate', element='PL', xdim=None, ydim=None, **kwargs):
-    '''Read a palate data file and return a landmark dataframe of columns 'x' and 'y', plus 'landmark' column. kwargs (like rep) will be passed to read_ecog_speaker_data().'''
-    paldf = read_ecog_speaker_data(
-        basepath, speaker, dataname, **kwargs
-    )
-    tracetimes = (paldf.sec > trange[0]) & (paldf.sec < trange[1])
-    palcols = ['{}_{}'.format(element, xdim), '{}_{}'.format(element, ydim)]
-    landmarkdf = paldf.loc[tracetimes, palcols]
-    landmarkdf.columns = ['x', 'y']
-    landmarkdf = landmarkdf.assign(
-        landmark=['palate'] * len(landmarkdf)
-    )
-    return landmarkdf
+    def get_palate_trace(self, speakerid, trange, dataname='Palate', element='PL', xdim=None, ydim=None, **kwargs):
+        '''Read a palate data file and return a landmark dataframe of columns 'x' and 'y', plus 'landmark' column. kwargs (like rep) will be passed to get_speaker_utt().'''
+        paldf = self.get_speaker_utt(
+            speakerid, dataname, **kwargs
+        )
+        tracetimes = (paldf.sec > trange[0]) & (paldf.sec < trange[1])
+        palcols = ['{}_{}'.format(element, xdim), '{}_{}'.format(element, ydim)]
+        landmarkdf = paldf.loc[tracetimes, palcols]
+        landmarkdf.columns = ['x', 'y']
+        landmarkdf = landmarkdf.assign(
+            landmark=['palate'] * len(landmarkdf)
+        )
+        return landmarkdf
 
-def read_ecog_speaker_data(basepath, speaker, dataname, rep=None, drop_prefixes=['EMPTY']):
-    '''Read a UCSF EMA (ECOG) speaker data file into a DataFrame.
-The directory name is formed from basepath and speaker.
+    def get_speaker_utt(self, speakerid, dataname, rep=None, drop_prefixes=['EMPTY']):
+        '''Read a UCSF EMA (ECOG) speaker utterance into a DataFrame.
+The directory name is formed from datadir and speaker.
 The filename is formed from speaker, dataname, and the repetition (rep). The
 rep parameter can be a string or an integer.
-Empty columns (identified by empty or whitespace-only column names) are dropped.
 '''
-    snre = re.compile(r'\d+$')
-    if rep is None or rep == '':
-        rep = ''
-    else:
-        if not isinstance(rep, str):  # if rep is passed as an int
-            rep = '_{:03d}'.format(rep)
-        elif not rep.startswith('_'):
-            rep = '_' + rep
-    fname = os.path.join(
-        basepath,
-        ecog_speakerdir_for_speaker(speaker),
-        '{}_{}{}.ndi'.format(speaker, dataname, rep)
-    )
+        if rep is None or rep == '':
+            rep = ''
+        else:
+            if not isinstance(rep, str):  # if rep is passed as an int
+                rep = '_{:03d}'.format(rep)
+            elif not rep.startswith('_'):
+                rep = '_' + rep
+        spkr_int_str = speaker_as_int_str(speakerid)
+        fname = os.path.join(
+            self.datadir,
+            'Subject_{}'.format(spkr_int_str),
+            'SN{}_{}{}.ndi'.format(spkr_int_str, dataname, rep)
+        )
     
-    df = pd.read_csv(fname, sep='\t')
-    to_drop = [c for name in drop_prefixes for c in df.columns if c.startswith(name)]
-    df = df.drop(to_drop, axis=1)
+        df = pd.read_csv(fname, sep='\t')
+        to_drop = [c for name in drop_prefixes for c in df.columns if c.startswith(name)]
+        df = df.drop(to_drop, axis=1)
 
-    if 'time' in df.columns:
-        df = df.rename(columns={'time': 'sec'})
+        if 'time' in df.columns:
+            df = df.rename(columns={'time': 'sec'})
 
-    # Calculate velocities for all coordinate columns and add as <coordinate>_vel columns.
-    coordcols = [
-        c for c in df.columns if c[-2:] in ['_x', '_y', '_z']
-    ]
-    df = df.join(df[coordcols].diff(), rsuffix='_vel')
+        # Calculate velocities for all coordinate columns and add as
+        # <coordinate>_vel columns.
+        coordcols = [c for c in df.columns if c[-2:] in ['_x', '_y', '_z']]
+        df = df.join(df[coordcols].diff(), rsuffix='_vel')
+        return df
 
-#    return with_quats(df, sensors)
-    return df
+    def get_speaker_list(self, sorted=True):
+        '''Return a list of speakers, sorted by speaker number.'''
+        spkrs = list(self.speaker_map.keys())
+        if sorted is True:
+            spkrs.sort(key=lambda x: int(x))
+        return spkrs
+
+    def get_utterance_list_for_speaker(self, speakerid, sorted=True):
+        '''Return a list of utterances for a speaker.'''
+        spkr_int_str = speaker_as_int_str(speakerid)
+        utts = list(self.speaker_map[spkr_int_str].keys())
+        if sorted is True:
+            utts.sort()
+        return utts
+        
+    def get_rep_list_for_speaker_utterance(self, speakerid, utt, sorted=True):
+        '''Return a list of for a speaker utterance.'''
+        spkr_int_str = speaker_as_int_str(speakerid)
+        rep = list(self.speaker_map[spkr_int_str][utt])
+        if sorted is True:
+            rep.sort(key=lambda x: int(x))
+        return rep
 
 def read_marquette_speaker_data(basepath, speaker, dataname):
     '''Read Marquette EMA speaker data from a directory.'''

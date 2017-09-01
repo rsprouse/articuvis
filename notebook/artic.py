@@ -1,14 +1,27 @@
+import re
+import numpy as np
 from pyqtgraph.Qt import QtGui
 import pyqtgraph as pg
-import numpy as np
 
 class ArticuWidget(pg.GraphicsLayoutWidget):
     '''Widget that encapsulates element-based articulatory data, e.g. EMA,
 x-ray microbeam.'''
 
     @property
-    def _selected_element_brushes(self):
+    def _element_cols(self):
+        return  {
+            'x': ['{}_{}'.format(el, self.xyz[0]) for el in self.elements],
+            'y': ['{}_{}'.format(el, self.xyz[1]) for el in self.elements]
+        }
+
+    @property
+    def selected_element_brushes(self):
         '''Return a list of symbolBrushes for currently selected elements.'''
+        if self._selected_element_brushes == {}:
+            self.set_selected_element_brushes()
+        return self._selected_element_brushes
+
+    def set_selected_element_brushes(self):
 # TODO: don't hardcode default here
         default = pg.mkBrush(color=(100, 100, 100, 255))
         br = []
@@ -19,11 +32,11 @@ x-ray microbeam.'''
                 br.append(pg.mkBrush(color=self.brushes[el]))
             except KeyError:
                 br.append(default)
-        return br
+        self._selected_element_brushes = br
 
     @property
-    def _selected_limits(self):
-        '''Return the limits of the currently selected data, with a bit of padding.'''
+    def _selected_range(self):
+        '''Return the range of the currently selected data.'''
         xmin = self._sel_df.loc[:, self._element_cols['x']].min().min()
         xmax = self._sel_df.loc[:, self._element_cols['x']].max().max()
         ymin = self._sel_df.loc[:, self._element_cols['y']].min().min()
@@ -33,39 +46,51 @@ x-ray microbeam.'''
             xmax = np.max([xmax, self.landmarkdf.x.max()])
             ymin = np.min([ymin, self.landmarkdf.y.min()])
             ymax = np.max([ymax, self.landmarkdf.y.max()])
-# TODO: fancier padding calculation dependent on size of range and viewBox 
-        xpad = (xmax - xmin) * 0.05
-        ypad = (ymax - ymin) * 0.05
-        return (
-            [xmin - xpad, xmax + xpad],
-            [ymin - ypad, ymax + ypad]
-        )
+        return ((xmin, xmax), (ymin, ymax))
 
-    def __init__(self, df, landmarkdf, xyz, lines, brushes, parent, **kargs):
+    def __init__(self, parent=None, **kwargs):
         super(ArticuWidget, self).__init__(parent)
+        self.parent = parent
+        self.plots = []
+        self.df = None
+        self.frameplot = self.addPlot(row=0, col=0)  # Plot of a single frame
+        self.frameplot.setAspectLocked(True)
+        self.traceplot = self.addPlot(row=0, col=1)  # Plot of time trace
+        self.traceplot.setAspectLocked(True)
+        self.posplot = self.addPlot(row=1, col=0)    # Plot of element position over time
+        self.velplot = self.addPlot(row=1, col=1)    # Plot of element velocity over time
+        self.pos_tcursor = pg.InfiniteLine(movable=True)
+        self.vel_tcursor = pg.InfiniteLine(movable=True)
+        self.clear_plots()
+
+    def clear_plots(self):
+        self.landmarkdf = None
+        self.lines = []  # List of element dicts to link as a line.
+        self.brushes = {}  # dict of symbolBrushes, one key per element
+        self.elements = [] # List of elements to plot
+# TODO: don't hardcode xyz
+        self.xyz = 'xyz'  # Mapping of displayed dims to data dims
+        self._is_updating = False
+# TODO: rename _sel* attributes and think about appropriate place to update values
+        self._sel_t1 = None
+        self._sel_t2 = None
+        self._sel_df = None
+        self._sel_landmarkdf = None
+        self._selected_element_brushes = {}
+# TODO: hide tcursors
+        self.pos_tcursor.setPos(0.0)
+        self.vel_tcursor.setPos(0.0)
+
+
+    def init_dataplots(self, df, landmarkdf, lines, brushes, xyz):
         self.df = df
         self.landmarkdf = landmarkdf
         self.lines = lines or []  # List of element names to link as a line.
         self.brushes = brushes or {}  # dict of symbolBrushes, one per element
         self.pen = pg.mkPen('g')
-        self.plots = []
-        self.elements = [
-            el.replace('_x', '') for el in df.columns if el.endswith('_x')
-        ]
         self.xyz = xyz
-        self.parent = parent
-        self._is_updating = False
 # TODO: update *._ as appropriate when object attributes change
 #        self._line_elements = [e for subl in self.lines for e in subl]
-        self._sel_t1 = None
-        self._sel_t2 = None
-        self._sel_df = None
-        self._sel_landmarkdf = None
-# TODO: rename _sel* attributes and think about appropriate place to update values
-        self._element_cols = {
-            'x': ['{}_{}'.format(el, self.xyz[0]) for el in self.elements],
-            'y': ['{}_{}'.format(el, self.xyz[1]) for el in self.elements]
-        }
         self._line_cols = {}
         self.pos_vel_dim = 'x'
         self.pos_vel_elements = []
@@ -73,12 +98,6 @@ x-ray microbeam.'''
         self.maxsymbsize = 5   # Maximum symbol size
         self.minalpha = 1      # Minimum alpha
         self.maxalpha = 255    # Maximum alpha
-        self.frameplot = self.addPlot(row=0, col=0)  # Plot of a single frame
-        self.traceplot = self.addPlot(row=0, col=1)  # Plot of time trace
-        self.posplot = self.addPlot(row=1, col=0)    # Plot of element positions over time
-        self.velplot = self.addPlot(row=1, col=1)    # Plot of element velocities over time
-        self.vel_tcursor = pg.InfiniteLine(movable=True)
-        self.pos_tcursor = pg.InfiniteLine(movable=True)
         
     def tselect(self, t1, t2):
         '''Select a time range from dataframes and cache.'''
@@ -103,20 +122,14 @@ x-ray microbeam.'''
         '''Create plots for time range.'''
         if t1 != self._sel_t1 and t2 != self._sel_t2:
             self.tselect(t1, t2)
-        # Find x/y ranges of selected data and landmarks.
         self.frameplot.clear()
-        lim = self._selected_limits
-        self.frameplot.setLimits(
-            xMin=lim[0][0], xMax=lim[0][1], minXRange=lim[0][1]-lim[0][0],
-            yMin=lim[1][0], yMax=lim[1][1], minYRange=lim[1][1]-lim[1][0]
-        )
         self.traceplot.clear()
-        self.traceplot.setLimits(
-            xMin=lim[0][0], xMax=lim[0][1], minXRange=lim[0][1]-lim[0][0],
-            yMin=lim[1][0], yMax=lim[1][1], minYRange=lim[1][1]-lim[1][0]
-        )
         self.posplot.clear()
         self.velplot.clear()
+        (xrng, yrng) = self._selected_range
+        if not np.any(np.isnan([xrng, yrng])):
+            self.frameplot.setRange(xRange=xrng, yRange=yrng)
+            self.traceplot.setRange(xRange=xrng, yRange=yrng)
         elemdims = [
             '{}_{}'.format(el, self.pos_vel_dim) for el in self.pos_vel_elements
         ]
@@ -147,12 +160,20 @@ x-ray microbeam.'''
             self.velplot.addItem(self.vel_tcursor)
         if self.landmarkdf is not None:
             for g in self.landmarkdf.groupby('landmark'):
-                self.frameplot.plot(g[1].x.values, g[1].y.values, pen=self.pen)
-                self.traceplot.plot(g[1].x.values, g[1].y.values, pen=self.pen)
+                wfr = self.frameplot.plot(
+                    g[1].x.values, g[1].y.values, pen=self.pen
+                )
+                wfr.setObjectName('_landmark_{}'.format(g[1].landmark))
+                wtr = self.traceplot.plot(
+                    g[1].x.values, g[1].y.values, pen=self.pen
+                )
+                wfr.setObjectName('_landmark_{}'.format(g[1].landmark))
         self.update_tplot(t1, t1)   # Set to start of frame
 
     def update_tplot(self, t1=None, t2=None):
         '''Update existing tplot between t1 and t2.'''
+        if self.df is None:
+            return
         # Skip current update if another update is still executing in order to
         # avoid RecursionError when too many calls to update_tplot() are made.
         if self._is_updating is True:
@@ -231,7 +252,7 @@ x-ray microbeam.'''
                 mskdf.loc[endidx, self._element_cols['y']].values,
                 symbol='o',
                 pen=None,
-                symbolBrush=self._selected_element_brushes,
+                symbolBrush=self.selected_element_brushes,
                 symbolSize=self.maxsymbsize,
                 name='_frameplot_scatter'
             )
@@ -281,14 +302,11 @@ x-ray microbeam.'''
 
     def animate(self):
         '''Animate tplots based on currently selected times.'''
-#        print('animating')
         if self._sel_t1 is None or self._sel_t2 is None:
             return
         tstep = 0.020
         nsteps = np.ceil((self._sel_t2 - self._sel_t1) / tstep) + 2
         tsel = np.linspace(self._sel_t1, self._sel_t2, nsteps)
-#        print(tsel)
         for t in tsel:
-#            print(t)
             self.update_tplot(self._sel_t1, t)
 

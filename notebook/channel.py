@@ -8,27 +8,29 @@ class ChannelWidget(pg.GraphicsLayoutWidget):
 # TODO: signal should be a single range instead of two floats
     cwsig_x_zoomed = QtCore.pyqtSignal(object)
     
-    def __init__(self, data=None, rate=None, parent=None, **kargs):
+    def __init__(self, parent=None, **kwargs):
         super(ChannelWidget, self).__init__(parent)
-        self.data = None   # will be set in init_audioplot_data
-        self.rate = None   # will be set in init_audioplot_data
-        self.sec = None    # will be set in init_audioplot_data
         self.pen = (255,255,255,200)
         self.audioplot = self.addPlot(row=0)
-        self.init_audioplot_data(data, np.int(rate))
+        #self.init_audioplot_data(data, np.int(rate))
 #        self.playback_line = pg.InfiniteLine(0.0, pen=(0, 0, 255, 200))
 # TODO: add spectrogram in second row
         self.parent = parent
-        self.stream = self._open_stream_()
         self.tcursor = pg.InfiniteLine(movable=True)
-        self.audioplot.addItem(self.tcursor)
         self.selectors = [None, None]
         self.quickzoom_halfwin = 0.100
+
+        # To be set in init_audioplot_data.
+        self.data = None
+        self.rate = None
+        self.sec = None
+        self.stream = None
 
     def _open_stream_(self):
         '''Set up the audio stream for playback.'''
         self.pya = pyaudio.PyAudio()
         stream = self.pya.open(
+# TODO: support other formats
             format = pyaudio.paInt16,
             channels = 1,
             rate = self.rate,
@@ -48,8 +50,11 @@ class ChannelWidget(pg.GraphicsLayoutWidget):
             clear=True
         )
         self.audioplot.setDownsampling(auto=True)
+        self.audioplot.addItem(self.tcursor)
+        self.audioplot.getViewBox().autoRange()
+        if self.stream is None:
+            self.stream = self._open_stream_()
 # TODO: emit signal when data changes (or determine which signal is already emitted)
-# TODO: set to full zoom out when data changes
 
     def zoom_to_selectors(self):
         '''Zoom viewbox to bounds selected by selectors.'''
