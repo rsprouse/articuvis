@@ -171,14 +171,14 @@ x-ray microbeam.'''
         self.update_tplot(t1, t1)   # Set to start of frame
 
     def update_tplot(self, t1=None, t2=None):
-        '''Update existing tplot between t1 and t2.'''
+        '''Update existing tplot between t1 and t2. Return True on success,
+False if no update occurs.'''
         if self.df is None:
-            return
+            return False
         # Skip current update if another update is still executing in order to
         # avoid RecursionError when too many calls to update_tplot() are made.
         if self._is_updating is True:
-# TODO: return a value so that caller can try again?
-            return
+            return False
         else:
             self._is_updating = True
         if t1 is None:
@@ -196,109 +196,81 @@ x-ray microbeam.'''
             xmask.iloc[0] = True
         mskdf = self._sel_df.loc[xmask, :]
         endidx = xmask[::-1].argmax()  # index of last selected value
-        di = None # TODO: why doesn't findChild() work?
         # Plot element lines.
         for name, desc in self.lines.items():
-#            print(name)
-#            print(desc)
 # TODO: not right place to set _line_cols
             self._line_cols[name] = {
                 'x': ['{}_{}'.format(el, self.xyz[0]) for el in desc['elements']],
                 'y': ['{}_{}'.format(el, self.xyz[1]) for el in desc['elements']]
             }
             try:
-# TODO: why doesn't findChild() work?
-                for item in self.frameplot.dataItems:
-                    if item.name() == name + '_line':
-                        di = item
-                        break
-                    di = None
-                #di = self.frameplot.findChild(pg.PlotDataItem, name + '_line')
+                di = self.frameplot.findChild(pg.PlotDataItem, '_line_' + name)
                 assert(di is not None)
-#                print('found {}_line'.format(name))
                 di.setData(
                     mskdf.loc[endidx, self._line_cols[name]['x']].values,
                     mskdf.loc[endidx, self._line_cols[name]['y']].values
                 )
             except AssertionError:
-#                print('plotting {}_line'.format(name))
-                self.frameplot.plot(  # Plot line at end of time selection.
+                line = self.frameplot.plot(  # Plot line at end of time selection.
                     mskdf.loc[endidx, self._line_cols[name]['x']].values,
                     mskdf.loc[endidx, self._line_cols[name]['y']].values,
-                    pen=desc['pen'],
-                    name=name + '_line'
+                    pen=desc['pen']
                 )
+                line.setParent(self.frameplot)
+                line.setObjectName('_line_{}'.format(name))
                 self.frameplot.showGrid(x=True, y=True, alpha=0.5)
                 self.frameplot.setAspectLocked(True)
         # Scatter plot of elements.
         try:
-# TODO: why doesn't findChild() work?
-            for item in self.frameplot.dataItems:
-                if item.name() == '_frameplot_scatter':
-                    di = item
-                    break
-                di = None
-            #di = self.frameplot.findChild(pg.PlotDataItem, '_frameplot_scatter')
+            di = self.frameplot.findChild(pg.PlotDataItem, '_frameplot_scatter_')
             assert(di is not None)
-#            print('found _frameplot_scatter')
             di.setData(
                 mskdf.loc[endidx, self._element_cols['x']].values,
                 mskdf.loc[endidx, self._element_cols['y']].values
             )
         except AssertionError:
-#            print('plotting _frameplot_scatter')
-            self.frameplot.plot(  # Plot non-tongue elements at end of selection.
+            frsc = self.frameplot.plot(  # Plot non-tongue elements at end of selection.
                 mskdf.loc[endidx, self._element_cols['x']].values,
                 mskdf.loc[endidx, self._element_cols['y']].values,
                 symbol='o',
                 pen=None,
                 symbolBrush=self.selected_element_brushes,
-                symbolSize=self.maxsymbsize,
-                name='_frameplot_scatter'
+                symbolSize=self.maxsymbsize
             )
+            frsc.setParent(self.frameplot)
+            frsc.setObjectName('_frameplot_scatter_')
         for idx, pts in enumerate(
                 zip(self._element_cols['x'], self._element_cols['y'])
             ):
             elx, ely = pts
-# TODO: don't hardcode '_x'
-#            if elx[:-2] in self._line_elements:
-#                symbr = (128, 128, 128, 128)
-#            else:
-#                symbr = (0, 0, 128, 128)
             try:
-                el = elx.replace('_x', '').replace('_y', '').replace('_z', '')
-                symbr = pg.mkBrush(color=self.brushes[el])
+                # elx[:-2] is element name without suffix '_x', '_y', or '_z'
+                symbr = pg.mkBrush(color=self.brushes[elx[:-2]])
             except KeyError:
                 symbr = pg.mkBrush(color=(128, 128, 128, 128))
             try:
-# TODO: why doesn't findChild() work?
-                for item in self.traceplot.dataItems:
-                    if item.name() == elx:
-                        di = item
-                        break
-                    di = None
-                #di = self.traceplot.findChild(pg.PlotDataItem, elx)
+                di = self.traceplot.findChild(pg.PlotDataItem, '_element_' + elx)
                 assert(di is not None)
-#                print('found {}'.format(elx))
                 di.setData(
                     mskdf.loc[:endidx, elx].values,
                     mskdf.loc[:endidx, ely].values
                 )
             except AssertionError:
-#                print('plotting {}'.format(elx))
-                self.traceplot.plot(
+                trp = self.traceplot.plot(
                     mskdf.loc[:endidx, elx].values,
                     mskdf.loc[:endidx, ely].values,
                     symbolSize=mskdf.loc[:endidx, 'symbsizes'],
                     pen=None,
                     symbol='o',
-                    symbolBrush=symbr,
-                    name=elx
+                    symbolBrush=symbr
                 )
+                trp.setParent(self.traceplot)
+                trp.setObjectName('_element_{}'.format(elx))
                 self.traceplot.showGrid(x=True, y=True, alpha=0.5)
                 self.traceplot.setAspectLocked(True)
-        pg.QtGui.QApplication.processEvents()  # Force a redraw.
+        pg.QtGui.QApplication.processEvents()
         self._is_updating = False
+        return True
 
     def animate(self):
         '''Animate tplots based on currently selected times.'''
