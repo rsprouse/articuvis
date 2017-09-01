@@ -211,7 +211,8 @@ False if no update occurs.'''
                     mskdf.loc[endidx, self._line_cols[name]['y']].values
                 )
             except AssertionError:
-                line = self.frameplot.plot(  # Plot line at end of time selection.
+                # Plot line at end of time selection.
+                line = self.frameplot.plot(
                     mskdf.loc[endidx, self._line_cols[name]['x']].values,
                     mskdf.loc[endidx, self._line_cols[name]['y']].values,
                     pen=desc['pen']
@@ -222,14 +223,18 @@ False if no update occurs.'''
                 self.frameplot.setAspectLocked(True)
         # Scatter plot of elements.
         try:
-            di = self.frameplot.findChild(pg.PlotDataItem, '_frameplot_scatter_')
+            di = self.frameplot.findChild(
+                pg.PlotDataItem,
+                '_frameplot_scatter_'
+            )
             assert(di is not None)
             di.setData(
                 mskdf.loc[endidx, self._element_cols['x']].values,
                 mskdf.loc[endidx, self._element_cols['y']].values
             )
         except AssertionError:
-            frsc = self.frameplot.plot(  # Plot non-tongue elements at end of selection.
+            # Plot non-tongue elements at end of selection.
+            frsc = self.frameplot.plot(
                 mskdf.loc[endidx, self._element_cols['x']].values,
                 mskdf.loc[endidx, self._element_cols['y']].values,
                 symbol='o',
@@ -244,12 +249,12 @@ False if no update occurs.'''
             ):
             elx, ely = pts
             try:
-                # elx[:-2] is element name without suffix '_x', '_y', or '_z'
+                # elx[:-2] is element name without suffix '_x', '_y', or '_z'.
                 symbr = pg.mkBrush(color=self.brushes[elx[:-2]])
             except KeyError:
                 symbr = pg.mkBrush(color=(128, 128, 128, 128))
             try:
-                di = self.traceplot.findChild(pg.PlotDataItem, '_element_' + elx)
+                di = self.traceplot.findChild(pg.PlotDataItem, '_element_'+elx)
                 assert(di is not None)
                 di.setData(
                     mskdf.loc[:endidx, elx].values,
