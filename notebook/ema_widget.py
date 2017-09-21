@@ -24,6 +24,10 @@ class DataLoaderWidget(pg.GraphicsLayoutWidget):
         return self.rep.currentText()
 
     @property
+    def selected_channel(self):
+        return self.channel.currentText()
+
+    @property
     def elements(self):
         try:
             cols = self.datadf.columns
@@ -74,6 +78,11 @@ as values.'''
         self.spkr = QtGui.QComboBox()
         self.utt = QtGui.QComboBox()
         self.rep = QtGui.QComboBox()
+
+        self.channel = QtGui.QComboBox()
+        self.channel.addItem('0')
+        self.channel.addItem('1')
+
         self.el_sel = QtGui.QGroupBox('Elements')
         self.el_sel.setLayout(QtGui.QGridLayout())
         self.add_speakers()
@@ -87,6 +96,7 @@ as values.'''
         layout.addWidget(self.spkr)
         layout.addWidget(self.utt)
         layout.addWidget(self.rep)
+        layout.addWidget(self.channel)
         layout.addWidget(self.load_button)
         layout.addWidget(self.el_sel)
         self.setLayout(layout)
@@ -113,6 +123,7 @@ as values.'''
         cb.currentIndexChanged.connect(self.handle_element_select)
         self.el_sel.layout().addWidget(cb)
         self.pos_vel_dim_cb = cb
+
         xyzcb = QtGui.QComboBox()
         xyzcb.setObjectName('xyz_map')
         xyzcb.addItem('xyz')
@@ -137,7 +148,8 @@ utterance, and repetition selections.'''
         return self.data_loader.get_audio(
             self.selected_speaker,
             self.selected_utterance,
-            self.selected_rep
+            self.selected_rep,
+	    int(self.selected_channel)
         )
 
     def get_speaker_utt(self):
@@ -156,7 +168,7 @@ selection.'''
 # TODO: don't hardcode trange, xdim, ydim
         return self.data_loader.get_palate_trace(
             self.selected_speaker,
-            trange=[8.2, 28.2],
+            trange=[1,12],
             xdim=self.xyz_map[0],
             ydim=self.xyz_map[1]
         )

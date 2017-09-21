@@ -52,7 +52,7 @@ numbers to utterances and repetitions.'''
                 spkrmap[spkrnum] = utterances
         return spkrmap
 
-    def get_audio(self, speakerid, dataname, rep):
+    def get_audio(self, speakerid, dataname, rep, channel):
         '''Read a UCSF EMA (ECOG) speaker audio file. Return sample rate and
 audio data as a numpy array.
 '''
@@ -71,7 +71,7 @@ audio data as a numpy array.
         )
         # Use wavio for broken .wav files
         w = wavio.read(fname)
-        return (w.rate, w.data[:, 0])
+        return (w.rate, w.data[:, channel])
 #        return scipy.io.wavfile.read(fname)
     
     def get_palate_trace(self, speakerid, trange, dataname='Palate', element='PL', xdim=None, ydim=None, **kwargs):
@@ -118,6 +118,8 @@ rep parameter can be a string or an integer.
         # Calculate velocities for all coordinate columns and add as
         # <coordinate>_vel columns.
         coordcols = [c for c in df.columns if c[-2:] in ['_x', '_y', '_z']]
+# TODO: smooth data before diff()
+# TODO: don't calculate *_vel columns in this function
         df = df.join(df[coordcols].diff(), rsuffix='_vel')
         return df
 

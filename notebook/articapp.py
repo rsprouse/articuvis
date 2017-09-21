@@ -114,22 +114,21 @@ class ArticApp(QtGui.QMainWindow):
 # TODO: don't hardcode values shown below
             lines={
                 'tongue': {
-                    'elements': ['TB', 'TL', 'TD'],
+                    'elements': ['TT', 'TB', 'TD'],
                     'pen': (128, 255, 128, 128)
                 },
                 'mouth': {
-                    'elements': ['LL', 'LC', 'UL'],
+                    'elements': ['LL', 'UL'],
                     'pen': (128, 128, 255, 128)
                 }
             },
             brushes={   # symbolBrushes used for element scatter plots
                 'TD': 'r',
                 'TB': 'r',
-                'TL': 'g',
+                'TT': 'r',
                 'LL': 'y',
-                'LC': 'g',
-                'JW': 'b',
                 'UL': 'y',
+                'JW': 'k',
                 'UI': 'k',
             },
         )
