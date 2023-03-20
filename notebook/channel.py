@@ -1,7 +1,7 @@
 from pyqtgraph.Qt import QtCore
 import pyqtgraph as pg
 import numpy as np
-import pyaudio
+import simpleaudio as sa
 
 # TODO: right name for the classes?
 class ChannelWidget(pg.GraphicsLayoutWidget):
@@ -24,19 +24,19 @@ class ChannelWidget(pg.GraphicsLayoutWidget):
         self.data = None
         self.rate = None
         self.sec = None
-        self.stream = None
+#        self.stream = None
 
-    def _open_stream_(self):
-        '''Set up the audio stream for playback.'''
-        self.pya = pyaudio.PyAudio()
-        stream = self.pya.open(
-# TODO: support other formats
-            format = pyaudio.paInt16,
-            channels = 1,
-            rate = self.rate,
-            output = True
-        )
-        return stream
+#    def _open_stream_(self):
+#        '''Set up the audio stream for playback.'''
+#        self.pya = pyaudio.PyAudio()
+#        stream = self.pya.open(
+## TODO: support other formats
+#            format = pyaudio.paInt16,
+#            channels = 1,
+#            rate = self.rate,
+#            output = True
+#        )
+#        return stream
 
     def init_audioplot_data(self, data, rate):
         '''Clear existing plots and load new audio.'''
@@ -52,8 +52,8 @@ class ChannelWidget(pg.GraphicsLayoutWidget):
         self.audioplot.setDownsampling(auto=True)
         self.audioplot.addItem(self.tcursor)
         self.audioplot.getViewBox().autoRange()
-        if self.stream is None:
-            self.stream = self._open_stream_()
+        #if self.stream is None:
+        #    self.stream = self._open_stream_()
 # TODO: emit signal when data changes (or determine which signal is already emitted)
 
     def zoom_to_selectors(self):
@@ -79,11 +79,18 @@ class ChannelWidget(pg.GraphicsLayoutWidget):
 
     def play_samples(self, s0, s1):
         '''Play audio from sample s0 to sample s1.'''
+        play_obj = sa.play_buffer(
+            self.data[s0:s1].astype(np.int16),
+            1,   # Number of channels
+            2,   # Bytes per sample
+            self.rate  # Samplerate
+        )
+        play_obj.wait_done()
 # TODO: support other dtype besides int16
 #        print('playing', s0, s1)
-        self.stream.write(
-            self.data[s0:s1].astype(np.int16).tostring()
-        )
+#        self.stream.write(
+#            self.data[s0:s1].astype(np.int16).tostring()
+#        )
 
     def mousePressEvent(self, e):
         self._pressed_screenpos = e.screenPos()
